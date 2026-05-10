@@ -1,0 +1,1965 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LyricFlow — Spotify Karaoke</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #121212;
+    --surface: #282828;
+    --surface-2: #333333;
+    --green: #FFD700;
+    --green-dim: rgba(255,215,0,0.15);
+    --green-glow: rgba(255,215,0,0.3);
+    --text-primary: #FFFFFF;
+    --text-secondary: #B3B3B3;
+    --text-muted: #535353;
+    --radius: 12px;
+    --transition: 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text-primary);
+    font-family: 'DM Sans', sans-serif;
+    overflow: hidden;
+  }
+
+  /* ─── APP SHELL ─── */
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    position: relative;
+    overflow: hidden;
+  }
+
+  /* ─── AMBIENT BACKGROUND ─── */
+  #ambient-bg {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    filter: blur(80px) saturate(1.8) brightness(0.5);
+    transform: scale(1.5);
+    opacity: 0.9;
+    transition: background-image 1.2s ease;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  /* ─── HEADER / SETUP PANEL ─── */
+  #header {
+    position: relative;
+    z-index: 10;
+    background: rgba(18,18,18,0.88);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    flex-shrink: 0;
+  }
+
+  #header-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 28px;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  #logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: var(--text-primary);
+    flex-shrink: 0;
+  }
+
+  #logo svg { fill: var(--green); }
+
+  #setup-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 20px;
+    padding: 7px 16px;
+    color: var(--text-secondary);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  #setup-toggle:hover { background: var(--surface-2); color: var(--text-primary); }
+  #setup-toggle svg { transition: transform 0.3s ease; }
+  #setup-toggle.open svg { transform: rotate(180deg); }
+
+  #recognition-badge {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    background: var(--green-dim);
+    border: 1px solid rgba(255,215,0,0.3);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 13px;
+    color: var(--green);
+    font-weight: 500;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+  }
+  #recognition-badge.visible { display: flex; }
+  #recognition-badge span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* ─── SETUP PANEL DROPDOWN ─── */
+  #setup-panel {
+    overflow: hidden;
+    max-height: 0;
+    transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  #setup-panel.open { max-height: 500px; }
+
+  #setup-inner {
+    padding: 4px 28px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  /* URL row */
+  #url-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 10px;
+    align-items: end;
+  }
+
+  .input-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .input-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .sp-input {
+    background: var(--surface);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 10px 14px;
+    color: var(--text-primary);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    width: 100%;
+    transition: border-color 0.2s;
+    outline: none;
+  }
+  .sp-input:focus { border-color: var(--green); }
+  .sp-input::placeholder { color: var(--text-muted); }
+
+  #lrc-input {
+    min-height: 110px;
+    resize: vertical;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  /* Status rows */
+  #status-line {
+    font-size: 12px;
+    color: var(--text-secondary);
+    min-height: 18px;
+    padding: 2px 0;
+    transition: color 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #status-line.ok { color: var(--green); }
+  #status-line.err { color: #e74c3c; }
+
+  #lyrics-status-line {
+    font-size: 12px;
+    color: var(--text-secondary);
+    min-height: 18px;
+    padding: 2px 0;
+    transition: color 0.3s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #lyrics-status-line.ok { color: var(--green); }
+  #lyrics-status-line.err { color: #e07020; }
+
+  .btn-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 10px 20px;
+    border-radius: 22px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+  }
+
+  .btn-primary {
+    background: var(--green);
+    color: #000;
+  }
+  .btn-primary:hover { background: #ffe033; transform: scale(1.03); }
+  .btn-primary:active { transform: scale(0.98); }
+
+  .btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+    border: 1px solid rgba(255,255,255,0.15);
+  }
+  .btn-ghost:hover { background: var(--surface); color: var(--text-primary); }
+
+  /* Fallback LRC section */
+  #lrc-fallback {
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+    border-top: 1px solid rgba(255,255,255,0.07);
+    padding-top: 10px;
+  }
+  #lrc-fallback.visible { display: flex; }
+
+  /* ─── MAIN CONTENT ─── */
+  #main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    position: relative;
+    z-index: 1;
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  /* ─── LEFT PANEL ─── */
+  #left-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 24px 28px;
+    gap: 16px;
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  /* Album art */
+  #album-art-container {
+    position: relative;
+    width: 310px;
+    height: 310px;
+    flex-shrink: 0;
+  }
+
+  #album-art-glow {
+    position: absolute;
+    inset: -24px;
+    border-radius: 16px;
+    background: radial-gradient(circle, var(--green-glow) 0%, transparent 70%);
+    opacity: 0;
+    transition: opacity 1s ease;
+    animation: pulse-glow 3s ease-in-out infinite;
+    animation-play-state: paused;
+    z-index: 0;
+  }
+
+  @keyframes pulse-glow {
+    0%, 100% { opacity: 0.35; transform: scale(1); }
+    50% { opacity: 0.75; transform: scale(1.1); }
+  }
+
+  .is-playing #album-art-glow {
+    animation-play-state: running;
+    opacity: 0.5;
+  }
+
+  #album-art-placeholder {
+    position: absolute;
+    inset: 0;
+    border-radius: 12px;
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1;
+  }
+  #album-art-placeholder svg { opacity: 0.2; }
+  #album-art-placeholder.hidden { display: none; }
+
+  #album-art {
+    width: 310px;
+    height: 310px;
+    border-radius: 12px;
+    object-fit: cover;
+    display: none;
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6), 0 0 0 2px rgba(255,255,255,0.06);
+    transition: box-shadow 0.6s ease;
+  }
+
+  /* Bottom-fade gradient overlay on album art */
+  #album-art-fade {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 50%;
+    border-radius: 0 0 12px 12px;
+    background: linear-gradient(to bottom, transparent, rgba(18,18,18,0.6));
+    z-index: 3;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.6s ease;
+  }
+  #album-art.loaded ~ #album-art-fade { opacity: 1; }
+
+  .is-playing #album-art {
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6), 0 0 50px var(--green-glow);
+  }
+
+  /* Vinyl dot hint */
+  #needle-dot {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 10px var(--green);
+    z-index: 3;
+    opacity: 0;
+    transition: opacity 0.4s;
+  }
+  .is-playing #needle-dot { opacity: 1; }
+
+  /* Song info */
+  #song-info {
+    text-align: center;
+    width: 100%;
+  }
+
+  #song-title {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    color: var(--text-primary);
+    line-height: 1.25;
+    margin-bottom: 4px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #song-artist {
+    font-size: 13px;
+    font-weight: 400;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* EQ Bars */
+  #eq-container {
+    display: flex;
+    align-items: flex-end;
+    gap: 5px;
+    height: 40px;
+  }
+
+  .eq-bar {
+    width: 13px;
+    border-radius: 3px;
+    background: var(--green);
+    transform-origin: bottom;
+    transform: scaleY(0.18);
+  }
+
+  .is-playing .eq-bar {
+    animation: eq-bounce 0.8s ease-in-out infinite alternate;
+  }
+
+  .eq-bar:nth-child(1) { height: 34px; animation-duration: 0.6s; animation-delay: 0s; }
+  .eq-bar:nth-child(2) { height: 40px; animation-duration: 0.9s; animation-delay: 0.1s; }
+  .eq-bar:nth-child(3) { height: 28px; animation-duration: 0.5s; animation-delay: 0.2s; }
+  .eq-bar:nth-child(4) { height: 38px; animation-duration: 0.7s; animation-delay: 0.05s; }
+  .eq-bar:nth-child(5) { height: 32px; animation-duration: 0.85s; animation-delay: 0.15s; }
+
+  @keyframes eq-bounce {
+    from { transform: scaleY(0.12); }
+    to { transform: scaleY(1); }
+  }
+
+  /* Progress bar */
+  #progress-area {
+    width: 100%;
+  }
+
+  #time-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+  }
+
+  #progress-track-wrap {
+    position: relative;
+    height: 4px;
+    cursor: pointer;
+    border-radius: 2px;
+    background: var(--surface-2);
+    transition: height 0.15s ease;
+  }
+  #progress-track-wrap:hover { height: 6px; }
+  #progress-track-wrap:hover #progress-thumb { transform: translateY(-50%) scale(1); }
+
+  #progress-fill {
+    height: 100%;
+    background: var(--green);
+    border-radius: inherit;
+    width: 0%;
+    transition: width 0.1s linear;
+    position: relative;
+  }
+
+  #progress-thumb {
+    position: absolute;
+    right: -6px;
+    top: 50%;
+    transform: translateY(-50%) scale(0);
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--text-primary);
+    box-shadow: 0 0 6px rgba(0,0,0,0.5);
+    transition: transform 0.2s ease;
+    pointer-events: none;
+  }
+
+  /* Play button */
+  #play-btn {
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    background: var(--green);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 20px rgba(255,215,0,0.4);
+    flex-shrink: 0;
+  }
+  #play-btn:hover { background: #ffe033; transform: scale(1.07); box-shadow: 0 6px 28px rgba(255,215,0,0.55); }
+  #play-btn:active { transform: scale(0.95); }
+  #play-btn svg { fill: #000; }
+
+  /* Hidden YouTube player */
+  #yt-player-wrap {
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* ─── RIGHT PANEL — LYRICS ─── */
+  #right-panel {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 28px 56px;
+    position: relative;
+    overflow: hidden;
+    border-left: 1px solid rgba(255,255,255,0.05);
+  }
+
+  #lyrics-display {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 32px;
+    width: 100%;
+    max-width: 680px;
+  }
+
+  .lyric-line {
+    text-align: center;
+    transition: opacity 0.35s ease;
+    width: 100%;
+    line-height: 1.3;
+    user-select: none;
+  }
+
+  .lyric-prev {
+    font-size: 18px;
+    font-weight: 400;
+    color: rgba(179,179,179,0.4);
+    min-height: 24px;
+  }
+
+  .lyric-current {
+    font-size: 34px;
+    font-weight: 700;
+    background: linear-gradient(
+      90deg,
+      #FFD700 0%,
+      #FFD700 20%,
+      #FFF8DC 35%,
+      #FFFFFF 45%,
+      #FFFDE7 50%,
+      #FFFFFF 55%,
+      #FFF8DC 65%,
+      #FFD700 80%,
+      #FFD700 100%
+    );
+    background-size: 250% 100%;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+    text-shadow: none;
+    animation: text-shine 2.4s ease-in-out infinite;
+    min-height: 44px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  @keyframes text-shine {
+    0%   { background-position: 160% center; }
+    100% { background-position: -60% center; }
+  }
+
+  .lyric-next {
+    font-size: 18px;
+    font-weight: 400;
+    color: rgba(179,179,179,0.4);
+    min-height: 24px;
+  }
+
+  /* Lyric transitions — scroll DOWN effect */
+  @keyframes lyric-slide-out {
+    from { opacity: 1; transform: translateY(0); }
+    to { opacity: 0; transform: translateY(30px); }
+  }
+  @keyframes lyric-slide-in {
+    from { opacity: 0; transform: translateY(-40px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .lyric-exit { animation: lyric-slide-out 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
+  .lyric-enter { animation: lyric-slide-in 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; }
+
+  /* Empty state */
+  #empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    color: var(--text-muted);
+    text-align: center;
+  }
+
+  #empty-state svg { opacity: 0.25; }
+
+  #empty-state p {
+    font-size: 14px;
+    line-height: 1.65;
+    max-width: 300px;
+    color: var(--text-muted);
+  }
+
+  #empty-state h3 {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text-secondary);
+  }
+
+  .empty-lyric-preview {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    margin: 4px 0 2px;
+  }
+
+  .empty-lyric-line {
+    text-align: center;
+    user-select: none;
+    transition: opacity 0.3s;
+  }
+
+  .empty-lyric-hint {
+    font-size: 22px;
+    font-weight: 700;
+    color: rgba(255,255,255,0.12);
+    letter-spacing: -0.01em;
+  }
+
+  .empty-lyric-sub {
+    font-size: 15px;
+    font-weight: 400;
+    color: rgba(179,179,179,0.18);
+  }
+
+  /* ─── MOBILE ─── */
+  @media (max-width: 720px) {
+    html, body { overflow: auto; }
+
+    #main {
+      grid-template-columns: 1fr;
+      grid-template-rows: auto 1fr;
+      overflow: auto;
+    }
+
+    #left-panel {
+      padding: 20px 20px 16px;
+      gap: 12px;
+    }
+
+    #album-art-container { width: 200px; height: 200px; }
+    #album-art { width: 200px; height: 200px; }
+
+    #right-panel {
+      border-left: none;
+      border-top: 1px solid rgba(255,255,255,0.05);
+      padding: 24px 24px 36px;
+      min-height: 240px;
+    }
+
+    .lyric-current { font-size: 24px; }
+    .lyric-prev, .lyric-next { font-size: 15px; }
+
+    #setup-panel.open { max-height: 700px; }
+    #url-row { grid-template-columns: 1fr; }
+  }
+
+  /* ─── LOADING SPINNER ─── */
+  .spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255,215,0,0.3);
+    border-top-color: var(--green);
+    border-radius: 50%;
+    animation: spin-fast 0.7s linear infinite;
+    display: inline-block;
+    flex-shrink: 0;
+  }
+
+  @keyframes spin-fast { to { transform: rotate(360deg); } }
+
+  /* ─── SHADER CANVAS ─── */
+  #shader-canvas {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+    display: block;
+  }
+
+</style>
+</head>
+<body>
+
+<canvas id="shader-canvas"></canvas>
+
+<div id="app">
+
+  <!-- Ambient Background (hidden — replaced by shader canvas) -->
+  <div id="ambient-bg" style="display:none"></div>
+
+  <!-- Header -->
+  <header id="header">
+    <div id="header-bar">
+      <div id="logo">
+        <svg width="22" height="22" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 3v9.28a4.39 4.39 0 00-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/>
+        </svg>
+        LyricFlow
+      </div>
+
+      <div id="recognition-badge">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 3v9.28a4.39 4.39 0 00-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/>
+        </svg>
+        <span id="recognition-text">Recognized song</span>
+      </div>
+
+      <button id="setup-toggle" class="open" aria-expanded="true">
+        Setup
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+      </button>
+    </div>
+
+    <div id="setup-panel" class="open">
+      <div id="setup-inner">
+
+        <!-- URL row -->
+        <div id="url-row">
+          <div class="input-group">
+            <label class="input-label" for="yt-url">YouTube URL</label>
+            <input id="yt-url" class="sp-input" type="url" placeholder="Paste YouTube link — dalszöveg automatikusan betöltve" autocomplete="off" spellcheck="false">
+          </div>
+          <div class="btn-row" style="align-self:flex-end">
+            <button class="btn btn-primary" id="start-btn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+              Start
+            </button>
+            <button class="btn btn-ghost" id="demo-btn">
+              ♫ Demo
+            </button>
+          </div>
+        </div>
+
+        <!-- Recognition status -->
+        <div id="status-line"></div>
+
+        <!-- Lyrics status -->
+        <div id="lyrics-status-line"></div>
+
+        <!-- Fallback LRC section (hidden unless auto-fetch fails) -->
+        <div id="lrc-fallback">
+          <div class="input-group">
+            <label class="input-label" for="lrc-input">LRC Dalszöveg (kézi)</label>
+            <textarea id="lrc-input" class="sp-input" placeholder="Paste LRC lyrics here&#10;[mm:ss.xx] Lyric line..."></textarea>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </header>
+
+  <!-- Main -->
+  <main id="main">
+
+    <!-- LEFT PANEL -->
+    <section id="left-panel">
+
+      <!-- Album Art -->
+      <div id="album-art-container">
+        <div id="album-art-glow"></div>
+        <div id="album-art-placeholder">
+          <svg width="56" height="56" viewBox="0 0 24 24" fill="#fff">
+            <path d="M12 3v9.28a4.39 4.39 0 00-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/>
+          </svg>
+        </div>
+        <img id="album-art" alt="Album art">
+        <div id="album-art-fade"></div>
+        <div id="needle-dot"></div>
+      </div>
+
+      <!-- Song info -->
+      <div id="song-info">
+        <div id="song-title">—</div>
+        <div id="song-artist">Paste a YouTube URL above</div>
+      </div>
+
+      <!-- EQ Bars -->
+      <div id="eq-container">
+        <div class="eq-bar"></div>
+        <div class="eq-bar"></div>
+        <div class="eq-bar"></div>
+        <div class="eq-bar"></div>
+        <div class="eq-bar"></div>
+      </div>
+
+      <!-- Progress -->
+      <div id="progress-area">
+        <div id="time-row">
+          <span id="time-current">0:00</span>
+          <span id="time-total">0:00</span>
+        </div>
+        <div id="progress-track-wrap">
+          <div id="progress-fill">
+            <div id="progress-thumb"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Play button -->
+      <button id="play-btn" aria-label="Play/Pause">
+        <svg id="play-icon" width="22" height="22" viewBox="0 0 24 24" fill="#000"><path d="M8 5v14l11-7z"/></svg>
+        <svg id="pause-icon" width="22" height="22" viewBox="0 0 24 24" fill="#000" style="display:none"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+      </button>
+
+      <!-- Hidden YT player -->
+      <div id="yt-player-wrap"><div id="yt-player"></div></div>
+
+      <!-- Shader Bar (moved to fixed bottom center via CSS) -->
+    </section>
+
+    <!-- RIGHT PANEL -->
+    <section id="right-panel">
+      <div id="lyrics-display" style="display:none">
+        <div class="lyric-line lyric-prev" id="lyric-prev"></div>
+        <div class="lyric-line lyric-current" id="lyric-current"></div>
+        <div class="lyric-line lyric-next" id="lyric-next"></div>
+      </div>
+
+      <div id="empty-state">
+        <svg width="72" height="72" viewBox="0 0 24 24" fill="#fff">
+          <path d="M12 3v9.28a4.39 4.39 0 00-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/>
+        </svg>
+        <h3>Ready to sing?</h3>
+        <div class="empty-lyric-preview" aria-hidden="true">
+          <div class="empty-lyric-line empty-lyric-hint">♫ Paste a YouTube URL to begin</div>
+          <div class="empty-lyric-line empty-lyric-sub">Dalszöveg automatikusan betöltve</div>
+          <div class="empty-lyric-line empty-lyric-sub">Then click Start</div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+
+<script>
+// ─── DEMO DATA ────────────────────────────────────────────────────────────────
+const DEMO_URL = 'https://www.youtube.com/watch?v=fJ9rUzIMcZQ';
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let ytPlayer = null;
+// lrcLines: for LRC mode each entry is { time, text }; for plain mode each entry is { text }
+let lrcLines = [];
+let lyricsMode = 'none'; // 'lrc' | 'plain' | 'none'
+let plainLyrics = []; // array of strings for plain (lyrics.ovh) mode
+let _lastLineIdx = -1;
+let _isTransitioning = false;
+let pollInterval = null;
+let isPlaying = false;
+let isSeeking = false;
+let _currentVideoId = null;
+window._currentVideoId = null;
+
+// ─── UTILS ────────────────────────────────────────────────────────────────────
+function extractVideoId(url) {
+  try {
+    const u = new URL(url.trim());
+    if (u.hostname.includes('youtu.be')) return u.pathname.slice(1).split('?')[0];
+    return u.searchParams.get('v');
+  } catch {
+    const m = url.match(/[?&]v=([^&#]+)/);
+    return m ? m[1] : null;
+  }
+}
+
+function formatTime(sec) {
+  if (isNaN(sec) || sec < 0) return '0:00';
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function parseLRC(text) {
+  const lines = [];
+  const re = /\[(\d+):(\d+(?:\.\d+)?)\]\s*(.*)/;
+  for (const line of text.split('\n')) {
+    const m = line.trim().match(re);
+    if (!m) continue;
+    const time = parseInt(m[1], 10) * 60 + parseFloat(m[2]);
+    const txt = m[3].trim();
+    if (txt) lines.push({ time, text: txt });
+  }
+  return lines.sort((a, b) => a.time - b.time);
+}
+
+function cleanTitle(str) {
+  return str
+    // English patterns
+    .replace(/\(official\s*(music\s*)?video\)/gi, '')
+    .replace(/\(official\s*audio\)/gi, '')
+    .replace(/\(lyrics?\s*(video)?\)/gi, '')
+    .replace(/\(audio\)/gi, '')
+    .replace(/\(feat\.?.*?\)/gi, '')
+    .replace(/\(ft\.?.*?\)/gi, '')
+    .replace(/\(prod\.?.*?\)/gi, '')
+    .replace(/\[.*?\]/g, '')           // remove anything in brackets
+    .replace(/【.*?】/g, '')           // Japanese brackets
+    .replace(/\|.*$/g, '')             // remove everything after pipe
+    .replace(/- Topic$/gi, '')         // YouTube Music auto-channels
+    .replace(/\(.*?version.*?\)/gi, '')
+    .replace(/\(.*?remix.*?\)/gi, '')
+    .replace(/\(.*?remaster.*?\)/gi, '')
+    .replace(/\(.*?live.*?\)/gi, '')
+    .replace(/MV$/gi, '')
+    .replace(/PV$/gi, '')
+    .trim();
+}
+
+function parseArtistTitle(ytTitle, ytAuthor) {
+  // Pattern 1: "Artist - Title" (most common)
+  if (ytTitle.includes(' - ')) {
+    const parts = ytTitle.split(' - ');
+    return { artist: cleanTitle(parts[0]), song: cleanTitle(parts.slice(1).join(' - ')) };
+  }
+  // Pattern 2: "Title / Artist" (some Asian music)
+  if (ytTitle.includes(' / ')) {
+    const parts = ytTitle.split(' / ');
+    return { artist: cleanTitle(parts[parts.length-1]), song: cleanTitle(parts[0]) };
+  }
+  // Pattern 3: "Artist「Title」" (Japanese)
+  const jpMatch = ytTitle.match(/^(.+?)「(.+?)」/);
+  if (jpMatch) return { artist: cleanTitle(jpMatch[1]), song: cleanTitle(jpMatch[2]) };
+  // Pattern 4: "Artist『Title』" (Japanese alternate)
+  const jpMatch2 = ytTitle.match(/^(.+?)『(.+?)』/);
+  if (jpMatch2) return { artist: cleanTitle(jpMatch2[1]), song: cleanTitle(jpMatch2[2]) };
+  // Fallback: use YouTube author as artist
+  const author = ytAuthor.replace(/\s*-\s*Topic$/i, '').trim();
+  return { artist: cleanTitle(author), song: cleanTitle(ytTitle) };
+}
+
+// ─── POSITION-BASED LYRIC SYNC ────────────────────────────────────────────────
+function getCurrentLineIndex(currentTime, duration, totalLines) {
+  if (!duration || totalLines === 0) return 0;
+  // Leave 5% buffer at start (intro) and 5% at end
+  const adjustedTime = Math.max(0, currentTime - duration * 0.05);
+  const adjustedDuration = duration * 0.90;
+  const ratio = Math.min(1, adjustedTime / adjustedDuration);
+  return Math.floor(ratio * totalLines);
+}
+
+// ─── STATUS HELPERS ───────────────────────────────────────────────────────────
+function setStatus(html, type) {
+  const el = document.getElementById('status-line');
+  el.innerHTML = html;
+  el.className = type || '';
+}
+
+function setLyricsStatus(html, type) {
+  const el = document.getElementById('lyrics-status-line');
+  el.innerHTML = html;
+  el.className = type || '';
+}
+
+// ─── COLOR EXTRACTION ─────────────────────────────────────────────────────────
+function extractColors(imgEl) {
+  try {
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const ctx = c.getContext('2d');
+    ctx.drawImage(imgEl, 0, 0, 64, 64);
+    const d = ctx.getImageData(0, 0, 64, 64).data;
+    const colors = [];
+    for (let i = 0; i < 8; i++) {
+      const px = (Math.floor(Math.random() * 64 * 64)) * 4;
+      colors.push({ r: d[px], g: d[px+1], b: d[px+2] });
+    }
+    let best = colors[0], bestSat = 0;
+    for (const col of colors) {
+      const max = Math.max(col.r, col.g, col.b), min = Math.min(col.r, col.g, col.b);
+      const sat = max === 0 ? 0 : (max - min) / max;
+      if (sat > bestSat) { bestSat = sat; best = col; }
+    }
+    const sorted = [...colors].sort((a, b) => (a.r+a.g+a.b) - (b.r+b.g+b.b));
+    window.albumColors = { palette: colors, vibrant: best, dark: sorted[0] };
+  } catch(e) {
+    // CORS or other error — keep yellow fallback
+    window.albumColors = null;
+  }
+}
+
+// ─── ALBUM ART ────────────────────────────────────────────────────────────────
+function setAlbumArt(src, videoId) {
+  const img = document.getElementById('album-art');
+  const ph = document.getElementById('album-art-placeholder');
+
+  window._currentVideoId = videoId;
+  _currentVideoId = videoId;
+
+  img.onerror = function() {
+    if (!this.src.includes('hqdefault')) {
+      this.src = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+    }
+  };
+  img.onload = function() {
+    ph.classList.add('hidden');
+    img.style.display = 'block';
+    img.classList.add('loaded');
+    extractColors(this);
+  };
+  img.src = src;
+}
+
+// ─── MULTI-API LYRICS FETCH (waterfall) ───────────────────────────────────────
+
+// Strip accents for fallback ASCII search
+function stripAccents(str) {
+  return str.normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+async function lrclibQ(q) {
+  const res = await fetch('https://lrclib.net/api/search?' + new URLSearchParams({ q }), { signal: AbortSignal.timeout(5000) });
+  if (!res.ok) throw new Error(res.status);
+  return await res.json();
+}
+
+function similarity(a, b) {
+  a = stripAccents(a).toLowerCase().replace(/[^a-z0-9 ]/g, '');
+  b = stripAccents(b).toLowerCase().replace(/[^a-z0-9 ]/g, '');
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  if (a.includes(b) || b.includes(a)) return 0.8;
+  const aWords = new Set(a.split(' ').filter(Boolean));
+  const bWords = b.split(' ').filter(Boolean);
+  const overlap = bWords.filter(w => aWords.has(w)).length;
+  return overlap / Math.max(aWords.size, bWords.length);
+}
+
+function scoreResult(r, artist, song) {
+  const artistSim = Math.max(
+    similarity(r.artistName || '', artist),
+    similarity(r.artistName || '', song)
+  );
+  const trackSim = similarity(r.trackName || '', song);
+  return artistSim * 2 + trackSim;
+}
+
+function pickBest(results, artist, song) {
+  if (!Array.isArray(results) || !results.length) return null;
+  const hasLyrics = results.filter(r =>
+    (r.syncedLyrics && r.syncedLyrics.length > 20) ||
+    (r.plainLyrics && r.plainLyrics.length > 20)
+  );
+  if (!hasLyrics.length) return null;
+  // Score by artist+title match — pick highest score
+  const scored = hasLyrics
+    .map(r => ({ r, score: scoreResult(r, artist || '', song || '') }))
+    .sort((a, b) => b.score - a.score);
+  // If best match has a decent score, use it; otherwise require synced lyrics
+  const best = scored[0];
+  if (best.score >= 0.4) return best.r;
+  // Low confidence — prefer synced over plain
+  const synced = hasLyrics.find(r => r.syncedLyrics && r.syncedLyrics.length > 20);
+  return synced || hasLyrics[0];
+}
+
+function applyHit(hit) {
+  if (hit.syncedLyrics && hit.syncedLyrics.length > 20) {
+    const parsed = parseLRC(hit.syncedLyrics);
+    if (parsed.length > 0) {
+      lrcLines = parsed; lyricsMode = 'lrc'; plainLyrics = [];
+      setLyricsStatus(`✓ ${parsed.length} sor — szinkronizált`, 'ok');
+      hideLrcFallback(); return true;
+    }
+  }
+  if (hit.plainLyrics && hit.plainLyrics.length > 20) {
+    const lines = hit.plainLyrics.split('\n').map(l => l.trim()).filter(Boolean);
+    if (lines.length > 0) {
+      plainLyrics = lines; lyricsMode = 'plain'; lrcLines = [];
+      setLyricsStatus(`✓ ${lines.length} sor betöltve`, 'ok');
+      hideLrcFallback(); return true;
+    }
+  }
+  return false;
+}
+
+async function fetchLyrics(artist, song, rawTitle) {
+  setLyricsStatus('<span class="spinner"></span> Keresés...', '');
+
+  // Build unique query list — try many variations
+  const seen = new Set();
+  const add = v => { const k = v.trim().toLowerCase(); if (v.trim().length > 1 && !seen.has(k)) { seen.add(k); return v.trim(); } return null; };
+  const queries = [
+    add(rawTitle || ''),
+    add(`${artist} ${song}`),
+    add(song),
+    add(artist),
+    add(stripAccents(rawTitle || '')),
+    add(stripAccents(`${artist} ${song}`)),
+    add(stripAccents(song)),
+  ].filter(Boolean);
+
+  // ── lrclib.net ─────────────────────────────────────────────────────────────
+  for (const q of queries) {
+    try {
+      setLyricsStatus(`<span class="spinner"></span> lrclib: „${q}"`, '');
+      const results = await lrclibQ(q);
+      const hit = pickBest(results, artist, song);
+      if (hit && applyHit(hit)) return;
+    } catch(e) { /* next */ }
+  }
+
+  // ── lyrics.ovh ─────────────────────────────────────────────────────────────
+  const ovhPairs = [
+    [artist, song],
+    [stripAccents(artist), stripAccents(song)],
+  ];
+  for (const [a, s] of ovhPairs) {
+    try {
+      setLyricsStatus(`<span class="spinner"></span> lyrics.ovh: „${a} – ${s}"`, '');
+      const res = await fetch(`https://api.lyrics.ovh/v1/${encodeURIComponent(a)}/${encodeURIComponent(s)}`, { signal: AbortSignal.timeout(5000) });
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (data.lyrics && data.lyrics.trim().length > 20) {
+        const lines = data.lyrics.split('\n').map(l => l.trim()).filter(Boolean);
+        if (lines.length > 0) {
+          plainLyrics = lines; lyricsMode = 'plain'; lrcLines = [];
+          setLyricsStatus(`✓ ${lines.length} sor betöltve`, 'ok');
+          hideLrcFallback(); return;
+        }
+      }
+    } catch(e) { /* next */ }
+  }
+
+  // ── Nem található ──────────────────────────────────────────────────────────
+  plainLyrics = []; lrcLines = []; lyricsMode = 'none';
+  setLyricsStatus(`✗ Nem található (próbált: ${queries.slice(0,3).join(', ')}) — illeszd be kézzel`, 'err');
+  showLrcFallback();
+}
+
+function showLrcFallback() {
+  document.getElementById('lrc-fallback').classList.add('visible');
+}
+
+function hideLrcFallback() {
+  document.getElementById('lrc-fallback').classList.remove('visible');
+}
+
+// ─── oEMBED + AUTO LYRICS ─────────────────────────────────────────────────────
+let oemebdDebounce = null;
+
+async function fetchOembed(videoId) {
+  const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`;
+  setStatus('<span class="spinner"></span> 🔍 Felismerés...', '');
+  setLyricsStatus('', '');
+  hideLrcFallback();
+  lyricsMode = 'none';
+  plainLyrics = [];
+  lrcLines = [];
+
+  try {
+    const res = await fetch(oembedUrl);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+
+    const rawTitle = data.title || '';
+    const { artist, song } = parseArtistTitle(rawTitle, data.author_name || '');
+
+    document.getElementById('song-title').textContent = song || rawTitle;
+    document.getElementById('song-artist').textContent = artist;
+
+    const thumbUrl = data.thumbnail_url || `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+    setAlbumArt(thumbUrl, videoId);
+
+    document.getElementById('recognition-text').textContent = `${artist} — ${song}`;
+    document.getElementById('recognition-badge').classList.add('visible');
+
+    setStatus(`✓ Kész! ${artist} — ${song}`, 'ok');
+
+    // Now auto-fetch lyrics via waterfall (pass rawTitle as extra search candidate)
+    await fetchLyrics(artist, song, cleanTitle(rawTitle));
+
+    return { title: song, artist };
+  } catch (err) {
+    setStatus('Nem sikerült felismerni — töltsd ki kézzel', 'err');
+    showLrcFallback();
+    return null;
+  }
+}
+
+// ─── URL INPUT ────────────────────────────────────────────────────────────────
+document.getElementById('yt-url').addEventListener('input', function() {
+  clearTimeout(oemebdDebounce);
+  const val = this.value.trim();
+  if (!val) return;
+  const videoId = extractVideoId(val);
+  if (!videoId) { setStatus('Paste a full YouTube URL', 'err'); return; }
+  oemebdDebounce = setTimeout(() => fetchOembed(videoId), 450);
+});
+
+document.getElementById('yt-url').addEventListener('paste', function(e) {
+  clearTimeout(oemebdDebounce);
+  const pasted = (e.clipboardData || window.clipboardData).getData('text');
+  const videoId = extractVideoId(pasted.trim());
+  if (videoId) {
+    oemebdDebounce = setTimeout(() => fetchOembed(videoId), 50);
+  } else {
+    // fallback: read input value after paste
+    oemebdDebounce = setTimeout(() => {
+      const val = this.value.trim();
+      const id = extractVideoId(val);
+      if (id) fetchOembed(id);
+    }, 150);
+  }
+});
+
+// ─── YOUTUBE IFRAME API ───────────────────────────────────────────────────────
+window.onYouTubeIframeAPIReady = function() { /* API ready */ };
+
+(function() {
+  const s = document.createElement('script');
+  s.src = 'https://www.youtube.com/iframe_api';
+  document.head.appendChild(s);
+})();
+
+function createPlayer(videoId) {
+  if (ytPlayer) {
+    try { ytPlayer.destroy(); } catch(e) {}
+    ytPlayer = null;
+  }
+  stopPoll();
+
+  const wrap = document.getElementById('yt-player-wrap');
+  wrap.innerHTML = '<div id="yt-player"></div>';
+
+  const tryCreate = () => {
+    if (!window.YT || !window.YT.Player) {
+      setTimeout(tryCreate, 200);
+      return;
+    }
+    ytPlayer = new YT.Player('yt-player', {
+      videoId: videoId,
+      host: 'https://www.youtube-nocookie.com',
+      playerVars: {
+        autoplay: 1,
+        controls: 0,
+        disablekb: 1,
+        enablejsapi: 1,
+        modestbranding: 1,
+        rel: 0,
+        showinfo: 0,
+        iv_load_policy: 3,
+      },
+      events: {
+        onReady: function(e) {
+          const dur = e.target.getDuration();
+          document.getElementById('time-total').textContent = formatTime(dur);
+          e.target.playVideo();
+          setStatus('');
+        },
+        onStateChange: onPlayerStateChange,
+        onError: function(e) {
+          setStatus('Playback error — check URL', 'err');
+        }
+      }
+    });
+  };
+  tryCreate();
+}
+
+function onPlayerStateChange(event) {
+  const app = document.getElementById('app');
+  if (event.data === YT.PlayerState.PLAYING) {
+    isPlaying = true;
+    app.classList.add('is-playing');
+    document.getElementById('play-icon').style.display = 'none';
+    document.getElementById('pause-icon').style.display = 'block';
+    startPoll();
+  } else {
+    isPlaying = false;
+    app.classList.remove('is-playing');
+    document.getElementById('play-icon').style.display = 'block';
+    document.getElementById('pause-icon').style.display = 'none';
+    if (event.data === YT.PlayerState.ENDED) stopPoll();
+  }
+}
+
+// ─── LYRIC ENGINE ─────────────────────────────────────────────────────────────
+
+// LRC mode: find current line by timestamp
+function findCurrentLineLRC(time) {
+  let idx = -1;
+  for (let i = 0; i < lrcLines.length; i++) {
+    if (lrcLines[i].time <= time) idx = i;
+    else break;
+  }
+  return idx;
+}
+
+function getLyricText(idx) {
+  if (lyricsMode === 'plain') {
+    if (idx < 0 || idx >= plainLyrics.length) return '';
+    return plainLyrics[idx];
+  } else {
+    // LRC
+    if (idx < 0 || idx >= lrcLines.length) return '';
+    return lrcLines[idx].text;
+  }
+}
+
+function getTotalLines() {
+  return lyricsMode === 'plain' ? plainLyrics.length : lrcLines.length;
+}
+
+function updateLyrics(time) {
+  const total = getTotalLines();
+  if (!total) return;
+
+  let idx;
+  if (lyricsMode === 'plain') {
+    // position-based
+    let dur = 0;
+    try {
+      if (ytPlayer && typeof ytPlayer.getDuration === 'function') {
+        dur = ytPlayer.getDuration();
+      }
+    } catch(e) {}
+    idx = getCurrentLineIndex(time, dur, total);
+  } else {
+    // LRC timestamp-based
+    idx = findCurrentLineLRC(time);
+  }
+
+  if (idx === _lastLineIdx) return;
+  _lastLineIdx = idx;
+
+  const prevEl = document.getElementById('lyric-prev');
+  const currEl = document.getElementById('lyric-current');
+  const nextEl = document.getElementById('lyric-next');
+
+  if (_isTransitioning) {
+    applyLyricsUI(idx, prevEl, currEl, nextEl);
+    return;
+  }
+
+  _isTransitioning = true;
+  currEl.classList.add('lyric-exit');
+
+  function finish() {
+    currEl.classList.remove('lyric-exit');
+    applyLyricsUI(idx, prevEl, currEl, nextEl);
+    currEl.classList.add('lyric-enter');
+    // Reset text-shine so it always starts from the left on a new line
+    currEl.style.animation = 'none';
+    void currEl.offsetHeight;
+    currEl.style.animation = 'text-shine 2.4s ease-in-out infinite';
+    currEl.addEventListener('animationend', function done() {
+      currEl.removeEventListener('animationend', done);
+      currEl.classList.remove('lyric-enter');
+      _isTransitioning = false;
+    }, { once: true });
+  }
+
+  currEl.addEventListener('animationend', function onExit() {
+    currEl.removeEventListener('animationend', onExit);
+    finish();
+  }, { once: true });
+
+  setTimeout(() => {
+    if (_isTransitioning) {
+      currEl.classList.remove('lyric-exit');
+      finish();
+    }
+  }, 400);
+}
+
+function applyLyricsUI(idx, prevEl, currEl, nextEl) {
+  prevEl.textContent = getLyricText(idx - 1);
+  currEl.textContent = getLyricText(idx);
+  nextEl.textContent = getLyricText(idx + 1);
+}
+
+// ─── POLL ─────────────────────────────────────────────────────────────────────
+function startPoll() {
+  if (pollInterval) return;
+  pollInterval = setInterval(() => {
+    if (!ytPlayer || typeof ytPlayer.getCurrentTime !== 'function') return;
+    try {
+      if (isSeeking) return;
+      const time = ytPlayer.getCurrentTime();
+      const dur = ytPlayer.getDuration();
+      document.getElementById('time-current').textContent = formatTime(time);
+      if (dur > 0) {
+        document.getElementById('progress-fill').style.width = ((time / dur) * 100) + '%';
+      }
+      updateLyrics(time);
+    } catch(e) {}
+  }, 100);
+}
+
+function stopPoll() {
+  clearInterval(pollInterval);
+  pollInterval = null;
+}
+
+// ─── PROGRESS BAR SEEK ────────────────────────────────────────────────────────
+const progressWrap = document.getElementById('progress-track-wrap');
+
+function seekToPercent(pct) {
+  pct = Math.max(0, Math.min(1, pct));
+  document.getElementById('progress-fill').style.width = (pct * 100) + '%';
+  if (ytPlayer && typeof ytPlayer.getDuration === 'function') {
+    try {
+      const dur = ytPlayer.getDuration();
+      if (dur) ytPlayer.seekTo(dur * pct, true);
+    } catch(e) {}
+  }
+}
+
+function getSeekPct(clientX) {
+  const rect = progressWrap.getBoundingClientRect();
+  return (clientX - rect.left) / rect.width;
+}
+
+progressWrap.addEventListener('mousedown', (e) => {
+  isSeeking = true;
+  seekToPercent(getSeekPct(e.clientX));
+});
+progressWrap.addEventListener('touchstart', (e) => {
+  isSeeking = true;
+  if (e.touches[0]) seekToPercent(getSeekPct(e.touches[0].clientX));
+}, { passive: true });
+
+document.addEventListener('mousemove', (e) => {
+  if (isSeeking) seekToPercent(getSeekPct(e.clientX));
+});
+document.addEventListener('mouseup', () => { isSeeking = false; });
+document.addEventListener('touchmove', (e) => {
+  if (isSeeking && e.touches[0]) seekToPercent(getSeekPct(e.touches[0].clientX));
+}, { passive: true });
+document.addEventListener('touchend', () => { isSeeking = false; });
+
+// ─── PLAY/PAUSE ────────────────────────────────────────────────────────────────
+document.getElementById('play-btn').addEventListener('click', () => {
+  if (!ytPlayer || typeof ytPlayer.getPlayerState !== 'function') return;
+  try {
+    if (ytPlayer.getPlayerState() === 1) ytPlayer.pauseVideo();
+    else ytPlayer.playVideo();
+  } catch(e) {}
+});
+
+// ─── START ────────────────────────────────────────────────────────────────────
+document.getElementById('start-btn').addEventListener('click', () => {
+  const url = document.getElementById('yt-url').value.trim();
+  if (!url) { setStatus('Paste a YouTube URL first', 'err'); return; }
+  const videoId = extractVideoId(url);
+  if (!videoId) { setStatus('Invalid YouTube URL', 'err'); return; }
+
+  // Determine active lyrics source
+  _lastLineIdx = -1;
+  _isTransitioning = false;
+
+  // Check if user has pasted manual LRC as fallback
+  const lrcText = document.getElementById('lrc-input').value.trim();
+  if (lrcText) {
+    // Manual LRC overrides auto-fetched plain lyrics
+    lrcLines = parseLRC(lrcText);
+    if (lrcLines.length > 0) {
+      lyricsMode = 'lrc';
+      plainLyrics = [];
+    }
+  }
+
+  const total = getTotalLines();
+
+  // Show/hide lyric panel
+  const display = document.getElementById('lyrics-display');
+  const empty = document.getElementById('empty-state');
+
+  if (total > 0) {
+    display.style.display = 'flex';
+    empty.style.display = 'none';
+    // Seed display
+    const prevEl = document.getElementById('lyric-prev');
+    const currEl = document.getElementById('lyric-current');
+    const nextEl = document.getElementById('lyric-next');
+    prevEl.textContent = '';
+    currEl.textContent = '';
+    nextEl.textContent = getLyricText(0);
+  } else {
+    display.style.display = 'none';
+    empty.style.display = 'flex';
+  }
+
+  // Close setup panel
+  document.getElementById('setup-panel').classList.remove('open');
+  document.getElementById('setup-toggle').classList.remove('open');
+  document.getElementById('setup-toggle').setAttribute('aria-expanded', 'false');
+
+  setStatus('Loading player…');
+  createPlayer(videoId);
+});
+
+// ─── SETUP TOGGLE ─────────────────────────────────────────────────────────────
+document.getElementById('setup-toggle').addEventListener('click', function() {
+  const panel = document.getElementById('setup-panel');
+  const isOpen = panel.classList.toggle('open');
+  this.classList.toggle('open', isOpen);
+  this.setAttribute('aria-expanded', String(isOpen));
+});
+
+// ─── DEMO ─────────────────────────────────────────────────────────────────────
+function loadDemo() {
+  document.getElementById('yt-url').value = DEMO_URL;
+
+  // Clear any manual LRC
+  document.getElementById('lrc-input').value = '';
+
+  // Open setup panel
+  document.getElementById('setup-panel').classList.add('open');
+  document.getElementById('setup-toggle').classList.add('open');
+  document.getElementById('setup-toggle').setAttribute('aria-expanded', 'true');
+
+  // Trigger full auto-recognition + lyrics fetch
+  const videoId = extractVideoId(DEMO_URL);
+  if (videoId) fetchOembed(videoId);
+}
+
+document.getElementById('demo-btn').addEventListener('click', loadDemo);
+
+// ─── SHADER SYSTEM ────────────────────────────────────────────────────────────
+
+// Canvas setup
+const shaderCanvas = document.getElementById('shader-canvas');
+const shaderCtx = shaderCanvas.getContext('2d');
+let SW, SH;
+let mouseX = 0, mouseY = 0;
+let clicks = [];
+let activeShader = 0;
+let animFrame;
+
+function resizeShaderCanvas() {
+  SW = shaderCanvas.width = window.innerWidth;
+  SH = shaderCanvas.height = window.innerHeight;
+  mouseX = SW / 2;
+  mouseY = SH / 2;
+}
+resizeShaderCanvas();
+window.addEventListener('resize', resizeShaderCanvas);
+
+// Mouse events on document (not canvas) so UI stays clickable
+document.addEventListener('mousemove', function(e) {
+  if (!isSeeking) { mouseX = e.clientX; mouseY = e.clientY; }
+});
+document.addEventListener('click', function(e) {
+  // Don't record clicks on UI buttons/inputs
+  const tag = e.target.tagName;
+  if (tag === 'BUTTON' || tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'A') return;
+  clicks.push({ x: e.clientX, y: e.clientY, t: Date.now(), life: 1.0 });
+  if (clicks.length > 20) clicks.shift();
+});
+
+// ── Mesh Gradient ─────────────────────────────────────────────────────────────
+function shaderRipples(t) { shaderMesh(t); }
+function shaderParticles(t) { shaderMesh(t); }
+function shaderPlasma(t) { shaderMesh(t); }
+function shaderAurora(t) { shaderMesh(t); }
+function shaderGrid(t) { shaderMesh(t); }
+
+const MESH_PTS = [
+  { ux:0.10, uy:0.20, vx: 0.00018, vy: 0.00022, ci:0, r:0.72 },
+  { ux:0.85, uy:0.12, vx:-0.00022, vy: 0.00018, ci:1, r:0.68 },
+  { ux:0.18, uy:0.82, vx: 0.00020, vy:-0.00016, ci:2, r:0.70 },
+  { ux:0.80, uy:0.78, vx:-0.00016, vy:-0.00020, ci:3, r:0.66 },
+  { ux:0.50, uy:0.48, vx: 0.00010, vy: 0.00014, ci:0, r:0.55 },
+  { ux:0.28, uy:0.55, vx:-0.00014, vy: 0.00018, ci:2, r:0.50 },
+  { ux:0.72, uy:0.40, vx: 0.00016, vy:-0.00012, ci:3, r:0.52 },
+];
+
+function meshColor(ci) {
+  const ac = window.albumColors;
+  if (ac) {
+    const keys = ['c0','c1','c2','c3'];
+    return ac[keys[ci]] || [180,80,200];
+  }
+  const defaults = [[180,60,220],[60,100,210],[220,90,60],[60,170,130]];
+  return defaults[ci];
+}
+
+function shaderMesh(t) {
+  shaderCtx.fillStyle = 'rgb(8,6,14)';
+  shaderCtx.fillRect(0, 0, SW, SH);
+
+  const mxN = mouseX / SW;
+  const myN = mouseY / SH;
+
+  for (const p of MESH_PTS) {
+    // Drift + very gentle mouse pull
+    p.ux += p.vx + (mxN - p.ux) * 0.00006;
+    p.uy += p.vy + (myN - p.uy) * 0.00006;
+    if (p.ux < -0.3 || p.ux > 1.3) p.vx *= -1;
+    if (p.uy < -0.3 || p.uy > 1.3) p.vy *= -1;
+
+    const px = p.ux * SW, py = p.uy * SH;
+    const radius = Math.min(SW, SH) * p.r * (1 + 0.08 * Math.sin(t * 0.4 + p.ux * 5));
+    const col = meshColor(p.ci);
+    const alpha = 0.38 + 0.06 * Math.sin(t * 0.35 + p.uy * 4);
+
+    const grad = shaderCtx.createRadialGradient(px, py, 0, px, py, radius);
+    grad.addColorStop(0,   `rgba(${col[0]},${col[1]},${col[2]},${alpha})`);
+    grad.addColorStop(0.45,`rgba(${col[0]},${col[1]},${col[2]},${alpha * 0.35})`);
+    grad.addColorStop(1,   `rgba(${col[0]},${col[1]},${col[2]},0)`);
+
+    shaderCtx.globalCompositeOperation = 'screen';
+    shaderCtx.fillStyle = grad;
+    shaderCtx.fillRect(0, 0, SW, SH);
+  }
+  shaderCtx.globalCompositeOperation = 'source-over';
+
+  // Click: spawn extra blob that fades out
+  for (const c of clicks) {
+    const col = meshColor(Math.floor(Math.random() * 4));
+    const r = Math.min(SW, SH) * 0.45 * (2 - c.life);
+    const grad = shaderCtx.createRadialGradient(c.x, c.y, 0, c.x, c.y, r);
+    grad.addColorStop(0,   `rgba(${col[0]},${col[1]},${col[2]},${c.life * 0.4})`);
+    grad.addColorStop(0.5, `rgba(${col[0]},${col[1]},${col[2]},${c.life * 0.1})`);
+    grad.addColorStop(1,   `rgba(${col[0]},${col[1]},${col[2]},0)`);
+    shaderCtx.globalCompositeOperation = 'screen';
+    shaderCtx.fillStyle = grad;
+    shaderCtx.fillRect(0, 0, SW, SH);
+    shaderCtx.globalCompositeOperation = 'source-over';
+    c.life -= 0.018;
+  }
+  clicks = clicks.filter(c => c.life > 0);
+}
+
+function _deadcode_shaderRipplesOld(t) {
+  const col = window.albumColors?.vibrant || { r:255, g:215, b:0 };
+  shaderCtx.fillStyle = '#0a0a0f';
+  shaderCtx.fillRect(0, 0, SW, SH);
+
+  const sources = [
+    { x: mouseX, y: mouseY, strength: 0.6, t: t },
+    ...clicks.map(c => ({ x: c.x, y: c.y, strength: c.life, t: (Date.now()-c.t)/1000 }))
+  ];
+
+  for (const src of sources) {
+    for (let r = 20; r < Math.max(SW, SH); r += 40) {
+      const wave = Math.sin(r * 0.05 - src.t * 3) * src.strength;
+      const alpha = Math.max(0, (1 - r / Math.max(SW, SH)) * 0.3 * (wave + 1) * 0.5);
+      shaderCtx.beginPath();
+      shaderCtx.arc(src.x, src.y, r, 0, Math.PI*2);
+      shaderCtx.strokeStyle = `rgba(${col.r},${col.g},${col.b},${alpha})`;
+      shaderCtx.lineWidth = 1.5;
+      shaderCtx.stroke();
+    }
+  }
+
+  clicks.forEach(c => { c.life = Math.max(0, c.life - 0.01); });
+  clicks = clicks.filter(c => c.life > 0);
+}
+
+// ── Shader 1: Magnetic Particles ─────────────────────────────────────────────
+let particles = [];
+function initParticles() {
+  particles = Array.from({ length: 250 }, () => ({
+    x: Math.random() * window.innerWidth,
+    y: Math.random() * window.innerHeight,
+    vx: (Math.random()-0.5)*0.5,
+    vy: (Math.random()-0.5)*0.5,
+    size: Math.random()*2.5+0.5,
+  }));
+}
+initParticles();
+
+function shaderParticles(t) {
+  const col = window.albumColors?.vibrant || { r:255, g:215, b:0 };
+  shaderCtx.fillStyle = 'rgba(10,10,15,0.15)';
+  shaderCtx.fillRect(0, 0, SW, SH);
+
+  for (const p of particles) {
+    const dx = mouseX - p.x, dy = mouseY - p.y;
+    const dist = Math.sqrt(dx*dx + dy*dy) || 1;
+    const force = Math.min(50/dist, 2);
+    p.vx += dx/dist * force * 0.02;
+    p.vy += dy/dist * force * 0.02;
+
+    for (const c of clicks) {
+      const cdx = p.x - c.x, cdy = p.y - c.y;
+      const cd = Math.sqrt(cdx*cdx + cdy*cdy) || 1;
+      if (cd < 150) {
+        p.vx += cdx/cd * (150-cd)/150 * 3 * c.life;
+        p.vy += cdy/cd * (150-cd)/150 * 3 * c.life;
+      }
+    }
+
+    p.vx *= 0.96; p.vy *= 0.96;
+    p.vx += (Math.random()-0.5)*0.1;
+    p.vy += (Math.random()-0.5)*0.1;
+    p.x += p.vx; p.y += p.vy;
+
+    if (p.x < 0) p.x = SW; if (p.x > SW) p.x = 0;
+    if (p.y < 0) p.y = SH; if (p.y > SH) p.y = 0;
+
+    const alpha = 0.6 + Math.sin(t + p.x*0.01)*0.4;
+    shaderCtx.beginPath();
+    shaderCtx.arc(p.x, p.y, p.size, 0, Math.PI*2);
+    shaderCtx.fillStyle = `rgba(${col.r},${col.g},${col.b},${alpha})`;
+    shaderCtx.fill();
+  }
+
+  // Draw connections
+  for (let i = 0; i < particles.length; i++) {
+    for (let j = i+1; j < particles.length; j++) {
+      const dx = particles[i].x - particles[j].x;
+      const dy = particles[i].y - particles[j].y;
+      const d = Math.sqrt(dx*dx + dy*dy);
+      if (d < 60) {
+        shaderCtx.beginPath();
+        shaderCtx.moveTo(particles[i].x, particles[i].y);
+        shaderCtx.lineTo(particles[j].x, particles[j].y);
+        shaderCtx.strokeStyle = `rgba(${col.r},${col.g},${col.b},${(1-d/60)*0.15})`;
+        shaderCtx.lineWidth = 0.5;
+        shaderCtx.stroke();
+      }
+    }
+  }
+
+  clicks.forEach(c => { c.life = Math.max(0, c.life - 0.015); });
+  clicks = clicks.filter(c => c.life > 0);
+}
+
+// ── Shader 2: Plasma Orbs ─────────────────────────────────────────────────────
+let orbs = [];
+function initOrbs() {
+  orbs = Array.from({ length: 6 }, (_, i) => ({
+    x: (0.1 + 0.15*i) * window.innerWidth,
+    y: window.innerHeight / 2,
+    vx: (Math.random()-0.5)*0.8,
+    vy: (Math.random()-0.5)*0.8,
+    r: 80 + Math.random()*120,
+    phase: Math.random()*Math.PI*2,
+  }));
+}
+initOrbs();
+
+function shaderPlasma(t) {
+  const col = window.albumColors?.vibrant || { r:255, g:215, b:0 };
+  const col2 = window.albumColors?.palette?.[2] || { r:200, g:150, b:0 };
+  shaderCtx.fillStyle = '#060608';
+  shaderCtx.fillRect(0, 0, SW, SH);
+
+  for (const o of orbs) {
+    const dx = mouseX - o.x, dy = mouseY - o.y;
+    const d = Math.sqrt(dx*dx + dy*dy) || 1;
+    o.vx += dx/d * 0.3 * Math.min(1, 200/d);
+    o.vy += dy/d * 0.3 * Math.min(1, 200/d);
+    o.vx *= 0.97; o.vy *= 0.97;
+    o.vx += Math.sin(t*0.7 + o.phase)*0.05;
+    o.vy += Math.cos(t*0.5 + o.phase)*0.05;
+    o.x += o.vx; o.y += o.vy;
+    if (o.x < o.r) { o.x = o.r; o.vx *= -0.5; }
+    if (o.x > SW-o.r) { o.x = SW-o.r; o.vx *= -0.5; }
+    if (o.y < o.r) { o.y = o.r; o.vy *= -0.5; }
+    if (o.y > SH-o.r) { o.y = SH-o.r; o.vy *= -0.5; }
+
+    const pulse = 1 + 0.15*Math.sin(t*1.5 + o.phase);
+    const grad = shaderCtx.createRadialGradient(o.x, o.y, 0, o.x, o.y, o.r*pulse);
+    grad.addColorStop(0, `rgba(${col.r},${col.g},${col.b},0.4)`);
+    grad.addColorStop(0.4, `rgba(${col2.r},${col2.g},${col2.b},0.15)`);
+    grad.addColorStop(1, `rgba(${col.r},${col.g},${col.b},0)`);
+    shaderCtx.fillStyle = grad;
+    shaderCtx.beginPath();
+    shaderCtx.arc(o.x, o.y, o.r*pulse, 0, Math.PI*2);
+    shaderCtx.fill();
+  }
+
+  // Click: spawn new orb
+  if (clicks.some(c => c.life > 0.95)) {
+    const newC = clicks.find(c => c.life > 0.95);
+    if (orbs.length < 12) {
+      orbs.push({ x: newC.x, y: newC.y, vx:0, vy:0, r:80+Math.random()*100, phase:Math.random()*Math.PI*2 });
+    } else {
+      orbs[Math.floor(Math.random()*orbs.length)] = { x: newC.x, y: newC.y, vx:0, vy:0, r:100, phase:Math.random()*Math.PI*2 };
+    }
+  }
+  clicks.forEach(c => { c.life = Math.max(0, c.life - 0.01); });
+  clicks = clicks.filter(c => c.life > 0);
+}
+
+// ── Shader 3: Aurora Curtain ──────────────────────────────────────────────────
+function shaderAurora(t) {
+  const col = window.albumColors?.vibrant || { r:255, g:215, b:0 };
+  const col2 = window.albumColors?.palette?.[3] || { r:255, g:180, b:50 };
+  shaderCtx.fillStyle = '#06060a';
+  shaderCtx.fillRect(0, 0, SW, SH);
+
+  const mxNorm = mouseX / SW;
+
+  const NUM_BANDS = 8;
+  for (let b = 0; b < NUM_BANDS; b++) {
+    const bPhase = (b / NUM_BANDS) * Math.PI * 2;
+    const baseX = (b / NUM_BANDS) * SW;
+
+    shaderCtx.beginPath();
+    shaderCtx.moveTo(baseX, 0);
+
+    for (let y = 0; y <= SH; y += 4) {
+      const yNorm = y / SH;
+      const waveX = baseX
+        + Math.sin(yNorm * 6 + t * 1.2 + bPhase) * 60
+        + Math.sin(yNorm * 3 - t * 0.7) * 40
+        + (mxNorm - 0.5) * 80 * Math.sin(yNorm * Math.PI)
+        + Math.sin(t * 2 + bPhase) * 30;
+      shaderCtx.lineTo(waveX, y);
+    }
+    shaderCtx.lineTo(baseX + SW/NUM_BANDS, SH);
+    shaderCtx.lineTo(baseX + SW/NUM_BANDS, 0);
+    shaderCtx.closePath();
+
+    const alpha = (0.05 + 0.05 * Math.sin(t + bPhase)) * (0.5 + 0.5 * (1 - Math.abs(b/NUM_BANDS - mxNorm)*2));
+    const lerpT = b / NUM_BANDS;
+    const r = Math.round(col.r * (1-lerpT) + col2.r * lerpT);
+    const g = Math.round(col.g * (1-lerpT) + col2.g * lerpT);
+    const bl = Math.round(col.b * (1-lerpT) + col2.b * lerpT);
+
+    const grad = shaderCtx.createLinearGradient(0, 0, 0, SH);
+    grad.addColorStop(0, `rgba(${r},${g},${bl},0)`);
+    grad.addColorStop(0.2, `rgba(${r},${g},${bl},${alpha*3})`);
+    grad.addColorStop(0.7, `rgba(${r},${g},${bl},${alpha})`);
+    grad.addColorStop(1, `rgba(${r},${g},${bl},0)`);
+    shaderCtx.fillStyle = grad;
+    shaderCtx.fill();
+  }
+
+  // Click flash
+  for (const c of clicks) {
+    const flashAlpha = c.life * 0.3;
+    const grad = shaderCtx.createRadialGradient(c.x, c.y, 0, c.x, c.y, 300*c.life);
+    grad.addColorStop(0, `rgba(255,255,255,${flashAlpha})`);
+    grad.addColorStop(0.3, `rgba(${col.r},${col.g},${col.b},${flashAlpha*0.5})`);
+    grad.addColorStop(1, `rgba(0,0,0,0)`);
+    shaderCtx.fillStyle = grad;
+    shaderCtx.fillRect(0, 0, SW, SH);
+    c.life = Math.max(0, c.life - 0.04);
+  }
+  clicks = clicks.filter(c => c.life > 0);
+}
+
+// ── Shader 4: Holographic Grid ────────────────────────────────────────────────
+function drawLightning(x1, y1, x2, y2, col, life) {
+  const segments = 8;
+  const pts = [{ x:x1, y:y1 }];
+  for (let i = 1; i < segments; i++) {
+    const tt = i / segments;
+    pts.push({
+      x: x1 + (x2-x1)*tt + (Math.random()-0.5)*60,
+      y: y1 + (y2-y1)*tt + (Math.random()-0.5)*60,
+    });
+  }
+  pts.push({ x:x2, y:y2 });
+  shaderCtx.beginPath();
+  shaderCtx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) shaderCtx.lineTo(pts[i].x, pts[i].y);
+  shaderCtx.strokeStyle = `rgba(255,255,255,${life*0.8})`;
+  shaderCtx.lineWidth = 2;
+  shaderCtx.shadowColor = `rgba(${col.r},${col.g},${col.b},1)`;
+  shaderCtx.shadowBlur = 10;
+  shaderCtx.stroke();
+  shaderCtx.shadowBlur = 0;
+}
+
+function shaderGrid(t) {
+  const col = window.albumColors?.vibrant || { r:255, g:215, b:0 };
+  shaderCtx.fillStyle = '#040408';
+  shaderCtx.fillRect(0, 0, SW, SH);
+
+  const cx = SW/2, cy = SH/2;
+  const mxOff = (mouseX - cx) / cx;
+  const myOff = (mouseY - cy) / cy;
+
+  const HORIZON_Y = cy + myOff * cy * 0.4;
+  const VANISH_X = cx + mxOff * cx * 0.3;
+
+  shaderCtx.save();
+
+  // Horizontal lines
+  for (let row = 0; row <= 20; row++) {
+    const tv = row / 20;
+    const y = HORIZON_Y + (SH - HORIZON_Y) * (tv * tv);
+    const xSpread = (y - HORIZON_Y) / (SH - HORIZON_Y) * SW * 0.7;
+    const alpha = tv * 0.4 * (0.7 + 0.3*Math.sin(t*2 + row*0.5));
+    shaderCtx.beginPath();
+    shaderCtx.moveTo(VANISH_X - xSpread/2, y);
+    shaderCtx.lineTo(VANISH_X + xSpread/2, y);
+    shaderCtx.strokeStyle = `rgba(${col.r},${col.g},${col.b},${alpha})`;
+    shaderCtx.lineWidth = 0.5 + tv;
+    shaderCtx.stroke();
+  }
+
+  // Vertical lines radiating from vanishing point
+  for (let ci = -10; ci <= 10; ci++) {
+    const spread = ci / 10;
+    const alpha = (1 - Math.abs(spread)) * 0.25 * (0.7 + 0.3*Math.sin(t + ci));
+    shaderCtx.beginPath();
+    shaderCtx.moveTo(VANISH_X, HORIZON_Y);
+    shaderCtx.lineTo(VANISH_X + spread * SW * 0.5, SH);
+    shaderCtx.strokeStyle = `rgba(${col.r},${col.g},${col.b},${alpha})`;
+    shaderCtx.lineWidth = 0.5;
+    shaderCtx.stroke();
+  }
+
+  // Glow at vanishing point
+  const vGrad = shaderCtx.createRadialGradient(VANISH_X, HORIZON_Y, 0, VANISH_X, HORIZON_Y, 200);
+  vGrad.addColorStop(0, `rgba(${col.r},${col.g},${col.b},0.15)`);
+  vGrad.addColorStop(1, `rgba(0,0,0,0)`);
+  shaderCtx.fillStyle = vGrad;
+  shaderCtx.fillRect(0, 0, SW, SH);
+
+  shaderCtx.restore();
+
+  // Click: electric arc
+  for (const c of clicks) {
+    if (c.life > 0.5) {
+      drawLightning(VANISH_X, HORIZON_Y, c.x, c.y, col, c.life);
+    }
+    c.life = Math.max(0, c.life - 0.03);
+  }
+  clicks = clicks.filter(c => c.life > 0);
+}
+
+// ── Animation loop ────────────────────────────────────────────────────────────
+const shaderFns = [shaderRipples, shaderParticles, shaderPlasma, shaderAurora, shaderGrid];
+
+function animateShader(ts) {
+  animFrame = requestAnimationFrame(animateShader);
+  shaderFns[activeShader](ts / 1000);
+}
+cancelAnimationFrame(animFrame);
+animateShader(0);
+
+</script>
+</body>
+</html>
